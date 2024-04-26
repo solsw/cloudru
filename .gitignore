@@ -17,5 +17,6 @@
 # Go workspace file
 go.work
 
-########
-gh_release_create.bat
+################################
+*.bat
+!keymanager_exe.bat

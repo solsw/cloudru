@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/solsw/errorhelper"
-	"github.com/solsw/generichelper"
 	"github.com/solsw/httphelper/rest"
 	"github.com/solsw/jwt"
 )
@@ -39,7 +38,7 @@ func NewToken(ctx context.Context, id, secret string) (*Token, error) {
 	v.Set("grant_type", "access_key")
 	v.Set("client_id", id)
 	v.Set("client_secret", secret)
-	t, err := rest.BodyJson[Token, generichelper.NoType](ctx,
+	t, err := rest.BodyJson[Token, OutError](ctx,
 		http.DefaultClient,
 		http.MethodPost,
 		"https://auth.iam.sbercloud.ru/auth/system/openid/token",
