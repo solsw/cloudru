@@ -10,7 +10,7 @@ import (
 
 	"github.com/solsw/errorhelper"
 	"github.com/solsw/generichelper"
-	"github.com/solsw/httphelper/rest"
+	"github.com/solsw/httphelper"
 )
 
 const (
@@ -38,8 +38,9 @@ type (
 		Owner            string   `json:"owner,omitempty"`
 		Primary          Primary  `json:"primary,omitempty"`
 		RotationPeriod   string   `json:"rotationPeriod,omitempty"`
-		ParentId         string   `json:"parentId,omitempty"`
-		UpdateMask       string   `json:"updateMask,omitempty"`
+		// https://cloud.ru/ru/docs/kms/ug/topics/guids_key-management_create.html# -> API
+		ParentId   string `json:"parentId,omitempty"`
+		UpdateMask string `json:"updateMask,omitempty"`
 	}
 	AllKeys struct {
 		Keys []Key `json:"keys"`
@@ -52,11 +53,10 @@ func GetAllKeys(ctx context.Context, accessToken, parentId string, pageLimit, pa
 	if accessToken == "" {
 		return nil, errorhelper.CallerError(errors.New("no accessToken"))
 	}
+	// https://cloud.ru/ru/docs/kms/ug/topics/guids_key-management_create.html -> API
 	if parentId == "" {
 		return nil, errorhelper.CallerError(errors.New("no parentId"))
 	}
-	h := make(http.Header)
-	h.Set("Authorization", "Bearer "+accessToken)
 	q := make(url.Values)
 	q.Set("parentId", parentId)
 	if pageLimit > 0 {
@@ -67,18 +67,16 @@ func GetAllKeys(ctx context.Context, accessToken, parentId string, pageLimit, pa
 	}
 	u, _ := url.Parse(baseUrl)
 	u.RawQuery = q.Encode()
-	ko, err := rest.BodyJson[AllKeys, generichelper.NoType](ctx,
-		http.DefaultClient,
-		http.MethodGet,
-		u.String(),
-		h,
-		nil,
-		rest.IsNotStatusOK,
-	)
+	rq, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, errorhelper.CallerError(err)
+	}
+	rq.Header.Set("Authorization", "Bearer "+accessToken)
+	kk, err := httphelper.ReqJson[AllKeys, generichelper.NoType](http.DefaultClient, rq, httphelper.IsNotStatusOK)
 	if err != nil {
 		return nil, err
 	}
-	return ko, nil
+	return kk, nil
 }
 
 // GetKey возвращает информацию об определённом ключе.
@@ -90,18 +88,14 @@ func GetKey(ctx context.Context, accessToken, keyId string) (*Key, error) {
 	if keyId == "" {
 		return nil, errorhelper.CallerError(errors.New("no keyId"))
 	}
-	h := make(http.Header)
-	h.Set("Authorization", "Bearer "+accessToken)
 	u, _ := url.Parse(baseUrl)
 	u.Path = path.Join(u.Path, keyId)
-	k, err := rest.BodyJson[Key, generichelper.NoType](ctx,
-		http.DefaultClient,
-		http.MethodGet,
-		u.String(),
-		h,
-		nil,
-		rest.IsNotStatusOK,
-	)
+	rq, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, errorhelper.CallerError(err)
+	}
+	rq.Header.Set("Authorization", "Bearer "+accessToken)
+	k, err := httphelper.ReqJson[Key, generichelper.NoType](http.DefaultClient, rq, httphelper.IsNotStatusOK)
 	if err != nil {
 		return nil, errorhelper.CallerError(err)
 	}
@@ -115,18 +109,18 @@ func CreateKey(ctx context.Context, accessToken string, key *Key) (*Key, error) 
 	if accessToken == "" {
 		return nil, errorhelper.CallerError(errors.New("no accessToken"))
 	}
-	h := make(http.Header)
-	h.Set("Authorization", "Bearer "+accessToken)
-	k, err := rest.JsonJson[Key, Key, generichelper.NoType](ctx,
-		http.DefaultClient,
-		http.MethodPost,
-		baseUrl,
-		h,
-		key,
-		rest.IsNotStatusOK,
-	)
+	body, err := httphelper.JsonBody(key)
 	if err != nil {
-		return nil, err
+		return nil, errorhelper.CallerError(err)
+	}
+	rq, err := http.NewRequestWithContext(ctx, http.MethodPost, baseUrl, body)
+	if err != nil {
+		return nil, errorhelper.CallerError(err)
+	}
+	rq.Header.Set("Authorization", "Bearer "+accessToken)
+	k, err := httphelper.ReqJson[Key, generichelper.NoType](http.DefaultClient, rq, httphelper.IsNotStatusOK)
+	if err != nil {
+		return nil, errorhelper.CallerError(err)
 	}
 	return k, nil
 }
@@ -141,18 +135,18 @@ func UpdateKey(ctx context.Context, accessToken, keyId string, key *Key) (*Key, 
 	if keyId == "" {
 		return nil, errorhelper.CallerError(errors.New("no keyId"))
 	}
-	h := make(http.Header)
-	h.Set("Authorization", "Bearer "+accessToken)
 	u, _ := url.Parse(baseUrl)
 	u.Path = path.Join(u.Path, keyId)
-	k, err := rest.JsonJson[Key, Key, generichelper.NoType](ctx,
-		http.DefaultClient,
-		http.MethodPatch,
-		u.String(),
-		h,
-		key,
-		rest.IsNotStatusOK,
-	)
+	body, err := httphelper.JsonBody(key)
+	if err != nil {
+		return nil, errorhelper.CallerError(err)
+	}
+	rq, err := http.NewRequestWithContext(ctx, http.MethodPatch, u.String(), body)
+	if err != nil {
+		return nil, errorhelper.CallerError(err)
+	}
+	rq.Header.Set("Authorization", "Bearer "+accessToken)
+	k, err := httphelper.ReqJson[Key, generichelper.NoType](http.DefaultClient, rq, httphelper.IsNotStatusOK)
 	if err != nil {
 		return nil, errorhelper.CallerError(err)
 	}
@@ -169,18 +163,14 @@ func DeleteKey(ctx context.Context, accessToken, keyId string) error {
 	if keyId == "" {
 		return errorhelper.CallerError(errors.New("no keyId"))
 	}
-	h := make(http.Header)
-	h.Set("Authorization", "Bearer "+accessToken)
 	u, _ := url.Parse(baseUrl)
 	u.Path = path.Join(u.Path, keyId)
-	_, err := rest.BodyBody[generichelper.NoType](ctx,
-		http.DefaultClient,
-		http.MethodDelete,
-		u.String(),
-		h,
-		nil,
-		rest.IsNotStatusOK,
-	)
+	rq, err := http.NewRequestWithContext(ctx, http.MethodDelete, u.String(), nil)
+	if err != nil {
+		return errorhelper.CallerError(err)
+	}
+	rq.Header.Set("Authorization", "Bearer "+accessToken)
+	_, err = httphelper.ReqBody[generichelper.NoType](http.DefaultClient, rq, httphelper.IsNotStatusOK)
 	if err != nil {
 		return errorhelper.CallerError(err)
 	}

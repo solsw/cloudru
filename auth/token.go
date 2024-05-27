@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/solsw/errorhelper"
-	"github.com/solsw/httphelper/rest"
+	"github.com/solsw/httphelper"
 	"github.com/solsw/jwt"
 )
 
@@ -32,20 +32,20 @@ type Token struct {
 //
 // [возвращает]: https://cloud.ru/ru/docs/console_api/ug/topics/guides__auth_api.html
 func NewToken(ctx context.Context, id, secret string) (*Token, error) {
-	h := make(http.Header)
-	h.Set("Content-Type", "application/x-www-form-urlencoded")
 	v := make(url.Values)
 	v.Set("grant_type", "access_key")
 	v.Set("client_id", id)
 	v.Set("client_secret", secret)
-	t, err := rest.BodyJson[Token, OutError](ctx,
-		http.DefaultClient,
+	rq, err := http.NewRequestWithContext(ctx,
 		http.MethodPost,
 		"https://auth.iam.sbercloud.ru/auth/system/openid/token",
-		h,
 		strings.NewReader(v.Encode()),
-		rest.IsNotStatusOK,
 	)
+	if err != nil {
+		return nil, errorhelper.CallerError(err)
+	}
+	rq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	t, err := httphelper.ReqJson[Token, OutError](http.DefaultClient, rq, httphelper.IsNotStatusOK)
 	if err != nil {
 		return nil, errorhelper.CallerError(err)
 	}
